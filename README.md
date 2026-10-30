@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/FanHarvard/agentbridge/main/docs/icon.png" alt="Agentbridge: two conversations connected by a bridge" width="64" height="64">
+
 # Agentbridge
 
 **Still in active development.**
