@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fanharvard-agentbridge"
+version = "0.1.0"
+description = "Local and LAN messaging between independently identified coding agents"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{name = "FanHarvard contributors"}]
+classifiers = ["Development Status :: 3 - Alpha", "Programming Language :: Python :: 3", "Programming Language :: Python :: 3 :: Only",
+  "Operating System :: POSIX :: Linux", "Operating System :: Microsoft :: Windows"]
+
+[project.scripts]
+agentbridge = "agentbridge.agent_hub:main"
+agentbridge-lan = "agentbridge.agent_lan:main"
+agentbridge-message = "agentbridge.agent_msg:main"
+agentbridge-codex-watch = "agentbridge.codex_watch:main"
+agentbridge-codex-hub-watch = "agentbridge.codex_hub_watch:main"
+agentbridge-claude-watch = "agentbridge.claude_watch:main"
+agentbridge-questions = "agentbridge.claude_question_bridge:main"
+agentbridge-opencode-watch = "agentbridge.opencode_watch:main"
+agentbridge-paths = "agentbridge.paths:main"
+
+[project.urls]
+Homepage = "https://github.com/FanHarvard/agentbridge"
+Repository = "https://github.com/FanHarvard/agentbridge"
+Issues = "https://github.com/FanHarvard/agentbridge/issues"
+
+[tool.setuptools]
+packages = ["agentbridge"]
+package-dir = {agentbridge = "bin"}
+include-package-data = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

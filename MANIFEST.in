@@ -1,0 +1,9 @@
+include LICENSE README.md
+recursive-include bin *.py *.sh *.ps1
+recursive-include templates *.md *.json
+recursive-include doc *.html
+recursive-include docs *.html
+recursive-include tests *.py
+recursive-include scripts *.py
+global-exclude __pycache__ *.py[cod] .env .pypirc *.pem *.key
+include .secrets.baseline

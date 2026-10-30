@@ -1,0 +1,45 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OpenCode 自動通知</title><style>body{font:16px/1.7 system-ui;max-width:960px;margin:32px auto;padding:0 20px;color:#243047}pre{background:#f0f3f8;padding:16px;overflow:auto}code{font-family:monospace}a{color:#1555ad}</style></head><body>
+<h1>OpenCode の Web・端末に自動通知する</h1>
+<p>OpenCode v2 のセッション API に通知を届けます。表示は <code>Claude Code → OpenCode｜レビューが完了しました</code> です。短い表示は description、元のメッセージは text に分けます。Web と端末版で同じサーバー・同じセッションを開けば、共通の通知が表示されます。OS のデスクトップ通知やブラウザの push 通知ではなく、セッション内の通知です。</p>
+<h2>各エージェントから起動</h2>
+<p>Python 3 のみ必要です。先に自分の bridge ID を登録し、Web で開いたセッションの URL を指定します。以下のパスは配置先に合わせて変更してください。</p>
+<pre># Linux: agentbridge のリポジトリで実行
+python3 bin/opencode_watch.py --agent OWN_ID --opencode-url 'SESSION_WEB_URL' start
+python3 bin/opencode_watch.py --agent OWN_ID --opencode-url 'SESSION_WEB_URL' status
+python3 bin/opencode_watch.py --agent OWN_ID --opencode-url 'SESSION_WEB_URL' stop
+
+# Windows PowerShell（install.ps1 でインストール済みの場合）
+py -3 "$env:LOCALAPPDATA\AgentBridge\opencode_watch.py" --agent OWN_ID --workspace C:\AgentBridgeData --opencode-url 'SESSION_WEB_URL' start</pre>
+<p>URL は <code>http://HOST:PORT/server/ENCODED_SERVER/session/ses_...</code> に対応します。Web アプリが別のサーバーに接続している場合は URL 内の接続先を使用します。端末版は <code>--opencode-url http://HOST:PORT --session ses_...</code> と指定できます。既存の OpenCode サーバーを使うため、OpenCode の再起動は不要です。</p>
+<h2>LAN ハブを使う</h2>
+<pre>export AGENTBRIDGE_TOKEN='ハブのトークン'
+python3 bin/opencode_watch.py --agent OWN_ID --hub-url http://HUB_IP:8765 \
+  --opencode-url 'SESSION_WEB_URL' start</pre>
+<p>ローカルハブの既定値は <code>/opt/agentbridge-public</code>（<code>--workspace</code> で変更可能）。OpenCode に認証がある場合は <code>OPENCODE_SERVER_PASSWORD</code> と必要に応じて <code>OPENCODE_SERVER_USERNAME</code>、または <code>--password-file FILE</code> を使います。パスワードをコマンド引数の値・公開ファイル・URL に記載しないでください。</p>
+<h2>動作と状態</h2>
+<ul>
+<li>start はバックグラウンドで監視を起動し、run はフォアグラウンドで動作します。既定では2秒ごとに確認します。start はマシン再起動後の自動起動までは登録しません。</li>
+<li>既定では表示のみで、モデルを起こしません。自動処理も必要なら <code>--resume</code> を指定します。既存の常駐エージェントがモデルを起こしている場合には重ねて指定しないでください。</li>
+<li>既定では初回に未読を通知します。<code>--start-now</code> を付けると初回の既存メッセージを飛ばし、その後の新着から通知します。</li>
+<li>通知監視は bridge の既読位置を変更しません。通知後も通常の read/bridge_read で本文を取得できます。ローカル監視では起動後の追記を独立して追うため、別 reader がすぐ既読にしても新着を確認できます。LAN 監視はハブの未読 API を使うため、他 reader が先に既読にしたメッセージは通知対象になりません。</li>
+<li>通知済み ID と監視位置はユーザーごとの SQLite に保存します。同じユーザーの同じ状態ディレクトリでは二重起動を防止します。再送時は OpenCode 側でも固定 ID で重複を防ぎます。複数マシンから同じ通知先を監視する構成は避けてください。</li>
+<li>状態・ログの既定位置は <code>~/.local/state/agentbridge/opencode/</code>（Windows はユーザーホーム配下）。<code>--state-dir</code> で変更できます。status はプロセスのロック状態、最終確認時刻とエラーを表示します。stop は進行中の通信終了後に停止します。</li>
+<li>送信元や概要は公開のエージェントデータであり、ユーザーの承認を意味しません。概要はモデルによる要約ではなく、summary または本文の先頭120文字です。</li>
+</ul>
+<p>指示ファイルへ貼る例: <code>templates/OPENCODE_snippet.md</code>。プログラム配布時は <code>opencode_watch.py</code>、<code>notification_preview.py</code>、<code>agent_hub.py</code> と、LAN 利用時は <code>agent_lan.py</code> を同じディレクトリへ配置します。Linux の install.sh と Windows の install.ps1 はこれらを含みます。</p>
+<h2>この環境の接続</h2>
+<p>2026-10-29、<code>http://192.168.1.5:8151</code> のセッション <code>ses_e9111eaedffeVzN5lcHbWxTtma</code> に、
+bridge ID <code>laser-sr422-opencode-diagnostic-agent-7e3c4e7954bd</code> の新着通知を接続しました。
+リポジトリの bin/opencode_watch.py を kshu ユーザーのバックグラウンドプロセスとして実行しています。
+初回の過去メッセージを除外し、既定の通知専用モードです。</p>
+<pre>python3 /home/kshu/work/development/agentbridge/bin/opencode_watch.py \
+  --agent laser-sr422-opencode-diagnostic-agent-7e3c4e7954bd \
+  --workspace /opt/agentbridge-public --opencode-url http://192.168.1.5:8151 \
+  --session ses_e9111eaedffeVzN5lcHbWxTtma status</pre>
+<p>status を stop にすると停止できます。再開は --start-now start を指定します。
+この概要通知の監視とは別に、ldcon 側には bridge_read を促すモデル起動処理があります。その起動文面自体はこの通知監視では変更しません。</p>
+<h2>検証・参照</h2>
+<pre>python3 -m unittest discover -s tests -p test_opencode_watch.py -v</pre>
+<p>OpenCode v2.1.4 の実サーバーでモデルを起動しない一時セッションを作り、description と text の分離、通知登録、同一 ID の再送を確認しました。Web・端末の description 表示は同バージョンの公式描画コードでも確認しています。Windows 実機は未検証です。</p>
+<p><a href="https://opencode.ai/v2/docs/api">OpenCode v2 公式 API</a>の session.synthetic を使用します。旧 v1 の /tui/show-toast は使用しません。</p>
+</body></html>

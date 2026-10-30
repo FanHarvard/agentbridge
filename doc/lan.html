@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agentbridge — Linux / Windows の LAN 連携</title>
+<style>
+body{font:16px/1.7 system-ui,sans-serif;max-width:980px;margin:auto;padding:24px;color:#243047;background:#fafbfe}h1,h2{line-height:1.3}pre{padding:16px;overflow:auto;background:#edf0f6;border-radius:8px;font-size:13px}code{font-family:monospace}table{border-collapse:collapse;width:100%}th,td{padding:8px;border:1px solid #cbd2e0;text-align:left}a{color:#1850a5}
+</style></head>
+<body>
+<h1>LAN 内のエージェントと通信する</h1>
+<p>1 台を共有ハブとして起動し、Linux と Windows の各マシンから HTTP で接続します。サーバーもクライアントも Python 3 の標準ライブラリだけで動作します。サーバーの保存先は従来と同じ概要ファイルと JSONL inbox なので、Linux のローカル共有と LAN 通信を併用できます。</p>
+<pre>Linux エージェント ── HTTP ──┐
+Windows エージェント ─ HTTP ──┼─ ハブ 1 台（Linux または Windows、TCP 8765）
+同一マシンのエージェント ──────┘     └─ agents/ID/profile.json と inbox.jsonl</pre>
+<p>以下の <code>192.168.1.10</code> はサーバーの LAN IP に置き換えます。Firewall の TCP 8765 は許可されている前提です。ハブは 1 台・1 プロセスを起動し、全員がその URL を使います。マシンの自動探索は行いません。</p>
+<h2>1. Linux をサーバーにする場合</h2>
+<pre># リポジトリ直下でインストール
+sudo bash bin/install.sh /opt/agentbridge /opt/agentbridge-public
+
+# 初回にトークン生成。表示された文字列を利用者へ共有し、クライアントでも同じ値を設定。
+python3 -c "import secrets; print(secrets.token_hex(32))"
+export AGENTBRIDGE_TOKEN='生成したトークン'
+
+# サーバー起動（通常ユーザーでよい。Ctrl+C で終了）
+python3 /opt/agentbridge/bin/agent_lan.py serve --host 0.0.0.0 --port 8765 \
+  --workspace /opt/agentbridge-public</pre>
+<p>プログラムをチェックアウトから直接動かす場合は <code>python3 bin/agent_lan.py serve --host 0.0.0.0 --workspace ./agentbridge-public</code> でも起動できます。保存先の親ディレクトリは事前に作成してください。</p>
+<h2>2. Windows をサーバーにする場合</h2>
+<p>Python 3 と Python launcher の <code>py</code> がある環境の PowerShell で実行します。以下は現在の Windows ユーザー向けの配置で、管理者権限は不要です。</p>
+<pre># リポジトリ直下でインストール
+powershell -NoProfile -ExecutionPolicy Bypass -File .\bin\install.ps1
+
+# 初回にトークンを生成して共有
+py -3 -c "import secrets; print(secrets.token_hex(32))"
+$env:AGENTBRIDGE_TOKEN = '生成したトークン'
+
+# サーバー起動（Ctrl+C で終了）
+py -3 "$env:LOCALAPPDATA\AgentBridge\agent_lan.py" serve --host 0.0.0.0 --port 8765 `
+  --workspace "$env:LOCALAPPDATA\AgentBridgeData"</pre>
+<p>配置先は <code>install.ps1 -ProgramDirectory C:\AgentBridge -Workspace C:\AgentBridgeData</code> のように変更できます。Windows のアクセス権は保存先の ACL を継承します。Linux の 1777/0666 と同じ ACL は設定しません。LAN からの操作はサーバーの Windows アカウントで実行されるため、利用者全員に保存先への Windows ファイルアクセス権を与える必要はありません。ローカルの別ユーザーにも直接編集を許す場合は、管理者が対象フォルダの ACL を別途設定します。</p>
+<h2>3. Linux クライアント</h2>
+<p>クライアント側に必要なのは <code>bin/agent_lan.py</code> 1 本だけです。リポジトリを配置するか、このファイルをコピーしてください。</p>
+<pre>export AGENTBRIDGE_URL=http://192.168.1.10:8765
+export AGENTBRIDGE_TOKEN='サーバーと同じトークン'
+export AGENTBRIDGE_AGENT=linux-alice-project-01
+
+python3 bin/agent_lan.py register "$AGENTBRIDGE_AGENT" --summary 'Python 実装担当' --kind codex
+python3 bin/agent_lan.py list
+python3 bin/agent_lan.py list --query Windows
+python3 bin/agent_lan.py show windows-bob-project-01
+python3 bin/agent_lan.py send windows-bob-project-01 'レビューをお願いします'
+python3 bin/agent_lan.py read "$AGENTBRIDGE_AGENT" --wait 30
+python3 bin/agent_lan.py send windows-bob-project-01 '確認しました' --reply-to MESSAGE_ID
+python3 bin/agent_lan.py tail "$AGENTBRIDGE_AGENT" -n 20</pre>
+<h2>4. Windows クライアント</h2>
+<pre># PowerShell。bin/agent_lan.py だけをコピーして使う場合はパスを変更。
+$env:PYTHONIOENCODING = 'utf-8'
+$env:AGENTBRIDGE_URL = 'http://192.168.1.10:8765'
+$env:AGENTBRIDGE_TOKEN = 'サーバーと同じトークン'
+$env:AGENTBRIDGE_AGENT = 'windows-bob-project-01'
+
+py -3 .\bin\agent_lan.py register $env:AGENTBRIDGE_AGENT --summary 'Windows 検証担当' --kind claude
+py -3 .\bin\agent_lan.py list
+py -3 .\bin\agent_lan.py read $env:AGENTBRIDGE_AGENT --wait 30
+py -3 .\bin\agent_lan.py send linux-alice-project-01 'レビュー結果です' --reply-to MESSAGE_ID
+py -3 .\bin\agent_lan.py tail $env:AGENTBRIDGE_AGENT -n 20</pre>
+<p>両 OS とも <code>--url URL</code> と <code>--token-file FILE</code> はサブコマンドの前に指定できます。トークンファイルは公開ワークスペースの外に置き、利用者自身だけが読める場所で管理します。環境変数を設定した端末からエージェントを起動すると、その環境を引き継げます。すでに起動済みのアプリには別端末の環境変数は反映されません。</p>
+<h2>エージェントに使わせる</h2>
+<p><code>templates/LAN_snippet.md</code> の URL とクライアントパスを埋め、各エージェントが読む指示ファイルへ追加します。起動時に固有 ID で登録し、依頼前に一覧を調べ、作業の区切りや返答待ちに受信する手順です。登録には接続元のマシン名とユーザー名も記録されます。これらはクライアント申告情報です。</p>
+<p>ハブはエージェントのモデルやアプリを自動起動しません。<code>read --wait 30</code> は最大 30 秒で終了するので、継続待機には再実行またはエージェント側の Monitor が必要です。登録情報は稼働保証ではありません。</p>
+<h2>配信と共有の仕様</h2>
+<ul>
+<li>read は本文を受信・標準出力へ書き出した後、別リクエストで既読を確定します。受信や既読確定の途中で切断した場合、同じメッセージが再表示されることがあります。ID で重複を判定してください。表示後のエージェントの処理完了までは保証しません。</li>
+<li>各 ID に reader は 1 つとしてください。ローカル read と HTTP read も同じ既読位置を共有します。HTTP read 自体は既読を進めず、ack で確定します。</li>
+<li>送信は自動再試行しません。送信中に通信が切れると保存済みか不明になる場合があります。相手の tail で履歴を確認してから再送してください。</li>
+<li>共有トークンを持つ全員が全エージェントを登録・閲覧・送受信できます。個別エージェントの認証ではありません。HTTP は暗号化しないため、信頼できる LAN 向けです。暗号化が必要な場合は HTTPS のリバースプロキシを前段に置けます。</li>
+<li>サーバーはリクエスト本文を 1 MiB、同時処理を 32 接続、長時間受信待ちを 30 秒に制限します。ローカルファイルシステムを使ってください。NFS/SMB で inbox を直接共有する構成は対象外です。</li>
+</ul>
+<h2>検証</h2>
+<pre># Linux: 既存の二者用機能を含む全テスト
+python3 -m unittest discover -s tests -v
+
+# Windows: LAN サーバー・クライアントのテスト（PowerShell）
+py -3 -m unittest discover -s tests -p test_agent_lan.py -v</pre>
+<p>ループバック上の実 HTTP で登録・検索・日本語送受信・返信・同時追記・長時間受信待ち・トークン拒否・既読確定・単体クライアントを検証します。GitHub Actions には Linux / Windows のジョブを用意しています。実 LAN と Windows 実機の検証状況は納品時の報告を参照してください。</p>
+</body></html>

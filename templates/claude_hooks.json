@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {"matcher": "AskUserQuestion",
+       "hooks": [{"type": "command", "command": "@HOOK@ --wait 900", "timeout": 930}]}
+    ],
+    "PermissionRequest": [
+      {"matcher": "*",
+       "hooks": [{"type": "command", "command": "@HOOK@", "timeout": 10}]}
+    ],
+    "Notification": [
+      {"matcher": "permission_prompt|elicitation_dialog|agent_needs_input",
+       "hooks": [{"type": "command", "command": "@HOOK@", "timeout": 10}]}
+    ]
+  }
+}
